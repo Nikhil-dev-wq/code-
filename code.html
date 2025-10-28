@@ -28,24 +28,20 @@
       cursor:pointer; transition:0.2s; display:flex; align-items:center; gap:5px;
     }
     button:hover { background:#444; }
-    .active { background:#22c55e !important; }
-
     #terminal {
       background:#000; color:#0f0; font-family:monospace;
       height:30vh; overflow-y:auto; padding:10px; border-top:1px solid #333;
       white-space:pre-wrap;
     }
-    .prompt {
-      display:inline;
-    }
     .input-line {
       display:inline;
-      outline:none;
-      border:none;
       background:none;
+      border:none;
+      outline:none;
       color:#0f0;
       font-family:monospace;
       caret-color:#0f0;
+      width:auto;
     }
   </style>
 </head>
@@ -79,14 +75,13 @@
     const db = firebase.database();
     const codeRef = db.ref("liveCode");
 
-    let editor, updating = false;
-    let viewOnly = false;
+    let editor, updating = false, viewOnly = false;
 
     // --- Monaco Setup ---
     require.config({ paths: { 'vs': 'https://cdn.jsdelivr.net/npm/monaco-editor@0.33.0/min/vs' } });
     require(["vs/editor/editor.main"], function() {
       editor = monaco.editor.create(document.getElementById("editor"), {
-        value: "# Real-time Python code sharing\nname = input('Enter your name: ')\nprint('Hello', name)",
+        value: "# Real-time Python code sharing\nname = input('Enter your name: ')\nprint('Name not', name)",
         language: "python",
         theme: "vs-dark",
         automaticLayout: true
@@ -95,24 +90,19 @@
       // Update Firebase when typing
       editor.onDidChangeModelContent(() => {
         if (viewOnly || updating) return;
-        codeRef.set({
-          code: editor.getValue(),
-          cursor: editor.getPosition()
-        });
+        codeRef.set({ code: editor.getValue(), cursor: editor.getPosition() });
       });
 
       // Receive updates
       codeRef.on("value", snap => {
         const val = snap.val();
         if (!val) return;
-
         const local = editor.getValue();
         if (local !== val.code) {
-          const currentPos = editor.getPosition();
+          const pos = editor.getPosition();
           updating = true;
           editor.setValue(val.code);
-          if (viewOnly && val.cursor) editor.setPosition(val.cursor);
-          else editor.setPosition(currentPos);
+          editor.setPosition(pos);
           updating = false;
         }
       });
@@ -121,20 +111,37 @@
     // --- Terminal Setup ---
     const terminal = document.getElementById("terminal");
 
+    function write(text = "") {
+      terminal.innerHTML += text;
+      terminal.scrollTop = terminal.scrollHeight;
+    }
+
     function writeLine(text = "") {
       terminal.innerHTML += text + "\n";
       terminal.scrollTop = terminal.scrollHeight;
     }
 
-    function writePrompt(prompt = "") {
-      const line = document.createElement("div");
-      line.innerHTML = `<span class='prompt'>${prompt}</span><input class='input-line' id='termInput' autofocus />`;
-      terminal.appendChild(line);
-      terminal.scrollTop = terminal.scrollHeight;
-      document.getElementById("termInput").focus();
+    function promptInput(prompt) {
+      return new Promise(resolve => {
+        write(prompt);
+        const input = document.createElement("input");
+        input.className = "input-line";
+        terminal.appendChild(input);
+        input.focus();
+
+        input.addEventListener("keydown", e => {
+          if (e.key === "Enter") {
+            const val = input.value;
+            input.disabled = true;
+            input.remove();
+            writeLine(val); // print input same line, move to next
+            resolve(val);
+          }
+        });
+      });
     }
 
-    // --- Run Python Code (Skulpt + Input Support) ---
+    // --- Run Python Code (Skulpt + True Terminal Input) ---
     const runBtn = document.getElementById("runBtn");
 
     runBtn.addEventListener("click", () => {
@@ -142,34 +149,19 @@
       const code = editor.getValue();
 
       Sk.configure({
-        output: text => {
-          writeLine(text);
-        },
+        output: text => write(text),
         read: name => {
           if (!Sk.builtinFiles || !Sk.builtinFiles["files"][name])
             throw "File not found: " + name;
           return Sk.builtinFiles["files"][name];
         },
-        inputfun: function(prompt) {
-          return new Promise(resolve => {
-            writePrompt(prompt);
-            const termInput = document.getElementById("termInput");
-            termInput.addEventListener("keydown", e => {
-              if (e.key === "Enter") {
-                const val = termInput.value;
-                termInput.disabled = true;
-                writeLine(val);
-                resolve(val);
-              }
-            });
-          });
-        },
+        inputfun: prompt => promptInput(prompt),
         inputfunTakesPrompt: true
       });
 
       Sk.misceval.asyncToPromise(() =>
         Sk.importMainWithBody("<stdin>", false, code, true)
-      ).catch(err => writeLine(`\n❌ ${err}`));
+      ).catch(err => writeLine("\n❌ " + err));
     });
 
     // --- Toggle Edit/View ---
