@@ -168,26 +168,22 @@
     const userInfo = document.getElementById("userInfo");
     const ADMIN_PASS = "Sakshi";
 
-    // --- Username ---
+    // --- Username setup ---
     function getCookie(name) {
       const value = `; ${document.cookie}`;
       const parts = value.split(`; ${name}=`);
       if (parts.length === 2) return parts.pop().split(";").shift();
     }
 
-    let username = getCookie("username");
-
-    // Keep asking for a valid name
+    let username = getCookie("username") || localStorage.getItem("username");
     while (!username || username.trim() === "") {
-      username = prompt("Enter your name (e.g., Coder):");
-      if (username && username.trim() !== "") {
-        username = username.trim();
-        document.cookie = `username=${username}; path=/; max-age=${60 * 60 * 24 * 30}`;
-      }
+      username = prompt("Enter your name (e.g., Coder):") || "Coder";
+      document.cookie = `username=${username}; path=/; max-age=${60 * 60 * 24 * 30}`;
+      localStorage.setItem("username", username);
     }
 
-    // --- Page Nav ---
-    toCodeBtn.onclick = () => { window.location.href = "code.html"; };
+    // --- Page Navigation ---
+    toCodeBtn.onclick = () => window.location.href = "code.html";
 
     // --- Typing Indicator ---
     let typingTimeout;
@@ -197,22 +193,28 @@
       typingTimeout = setTimeout(() => db.ref("typing/" + username).remove(), 1500);
     });
 
-    db.ref("typing").on("value", snapshot => {
+    db.ref("typing").on("value", (snapshot) => {
       const typers = snapshot.val() || {};
-      const others = Object.keys(typers).filter(n => n !== username);
+      const others = Object.keys(typers).filter((n) => n !== username);
       typingIndicator.textContent = others.length
         ? `${others.join(", ")} typing...`
         : "";
     });
 
-    // --- Online Users ---
+    // --- Online Users (Presence system) ---
+    const connectedRef = firebase.database().ref(".info/connected");
     const userRef = db.ref("online/" + username);
-    userRef.set(true);
-    userRef.onDisconnect().remove();
 
-    db.ref("online").on("value", snapshot => {
+    connectedRef.on("value", (snap) => {
+      if (snap.val() === true) {
+        userRef.set(true);
+        userRef.onDisconnect().remove();
+      }
+    });
+
+    db.ref("online").on("value", (snapshot) => {
       const users = snapshot.val() || {};
-      userInfo.textContent = "🟢 Online: " + Object.keys(users).length;
+      userInfo.textContent = `🟢 Online: ${Object.keys(users).length}`;
     });
 
     // --- Commands ---
@@ -267,7 +269,7 @@
     }
 
     // --- Receive Messages ---
-    db.ref("chat").on("child_added", snapshot => {
+    db.ref("chat").on("child_added", (snapshot) => {
       const msg = snapshot.val();
       const div = document.createElement("div");
       div.classList.add("msg");
