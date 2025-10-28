@@ -48,6 +48,7 @@
       font-size: 14px;
       color: #aaa;
       padding: 5px;
+      text-align: center;
     }
     #user-info {
       text-align: center;
@@ -62,11 +63,9 @@
     }
     .me {
       background: #238636;
-      align-self: flex-end;
     }
     .other {
       background: #30363d;
-      align-self: flex-start;
     }
   </style>
 </head>
@@ -74,6 +73,7 @@
 
   <div id="user-info">Loading...</div>
   <div id="chat-box"></div>
+
   <div style="max-width:700px;margin:10px auto;display:flex;">
     <input id="msg-input" placeholder="Type message..." />
     <button id="send-btn">Send</button>
@@ -81,20 +81,7 @@
   <div id="typing"></div>
 
   <script>
-    // --- Firebase Config ---
-    const firebaseConfig = {
-      apiKey: "YOUR_FIREBASE_KEY",
-      authDomain: "YOUR_FIREBASE_DOMAIN",
-      databaseURL: "YOUR_FIREBASE_DB_URL",
-      projectId: "YOUR_FIREBASE_PROJECT",
-      storageBucket: "YOUR_FIREBASE_BUCKET",
-      messagingSenderId: "YOUR_FIREBASE_SENDER_ID",
-      appId: "YOUR_FIREBASE_APP_ID"
-    };
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
-
-    // --- Username setup ---
+    // ---------- Ask for name first ----------
     function getCookie(name) {
       const value = `; ${document.cookie}`;
       const parts = value.split(`; ${name}=`);
@@ -116,7 +103,22 @@
     const typingIndicator = document.getElementById("typing");
     const userInfo = document.getElementById("user-info");
 
-    // --- Online Users ---
+    userInfo.textContent = `🟢 ${username} | Chat started`;
+
+    // ---------- Firebase Setup ----------
+    const firebaseConfig = {
+      apiKey: "AIzaSyCQOhn1RMCnGbtYyJbl_KyHwWzftsn44tk",
+      authDomain: "social-516f8.firebaseapp.com",
+      databaseURL: "https://social-516f8-default-rtdb.firebaseio.com/",
+      projectId: "social-516f8",
+      storageBucket: "social-516f8.appspot.com",
+      messagingSenderId: "190734911459",
+      appId: "1:190734911459:web:ef79ce73f7dbdd617e50a8"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    // ---------- Online users ----------
     const connectedRef = firebase.database().ref(".info/connected");
     const userRef = db.ref("online/" + username);
 
@@ -129,11 +131,11 @@
 
     db.ref("online").on("value", (snapshot) => {
       const users = snapshot.val() || {};
-      const onlineCount = Object.keys(users).length;
-      userInfo.textContent = `🟢 ${username} | Online: ${onlineCount}`;
+      const count = Object.keys(users).length;
+      userInfo.textContent = `🟢 ${username} | Online: ${count}`;
     });
 
-    // --- Send Message ---
+    // ---------- Send message ----------
     sendBtn.onclick = sendMessage;
     msgInput.addEventListener("keypress", (e) => {
       if (e.key === "Enter") sendMessage();
@@ -150,7 +152,7 @@
       msgInput.value = "";
     }
 
-    // --- Receive Messages ---
+    // ---------- Receive message ----------
     db.ref("messages").on("child_added", (snapshot) => {
       const msg = snapshot.val();
       const div = document.createElement("div");
@@ -160,12 +162,12 @@
       chatBox.scrollTop = chatBox.scrollHeight;
     });
 
-    // --- Typing Indicator ---
+    // ---------- Typing indicator ----------
     let typingTimeout;
     msgInput.addEventListener("input", () => {
       db.ref("typing/" + username).set(true);
       clearTimeout(typingTimeout);
-      typingTimeout = setTimeout(() => db.ref("typing/" + username).remove(), 1500);
+      typingTimeout = setTimeout(() => db.ref("typing/" + username).remove(), 1200);
     });
 
     db.ref("typing").on("value", (snapshot) => {
