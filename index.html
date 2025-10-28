@@ -1,111 +1,152 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Live Share Chat</title>
-
-  <!-- Firebase -->
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Coder Chat</title>
   <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-database-compat.js"></script>
-
+  <script src="https://unpkg.com/feather-icons"></script>
   <style>
     body {
-      font-family: Arial, sans-serif;
-      background: #0e1117;
-      color: white;
+      background: #111;
+      color: #fff;
+      font-family: sans-serif;
       margin: 0;
-      padding: 0;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
     }
-    #chat-box {
-      max-width: 700px;
-      margin: 20px auto;
-      background: #161b22;
-      border-radius: 10px;
-      padding: 10px;
-      height: 70vh;
-      overflow-y: auto;
-      box-shadow: 0 0 10px rgba(0,0,0,0.4);
-    }
-    #msg-input {
-      width: calc(100% - 100px);
-      padding: 10px;
-      border: none;
-      border-radius: 5px;
-      margin-right: 5px;
-      background: #21262d;
-      color: white;
-    }
-    #send-btn {
+    header {
+      background: #222;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
       padding: 10px 15px;
-      background: #238636;
-      border: none;
-      border-radius: 5px;
-      color: white;
-      cursor: pointer;
+      font-size: 1.1em;
+      border-bottom: 1px solid #333;
+      flex-wrap: wrap;
     }
-    #typing {
-      font-size: 14px;
+    #userInfo {
+      font-size: 0.85em;
       color: #aaa;
-      padding: 5px;
-      text-align: center;
     }
-    #user-info {
-      text-align: center;
+    #chatBox {
+      flex: 1;
+      overflow-y: auto;
+      padding: 15px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .msg {
+      background: #222;
+      padding: 8px 12px;
+      border-radius: 10px;
+      width: fit-content;
+      max-width: 70%;
+      word-wrap: break-word;
+    }
+    .self {
+      background: #2563eb;
+      align-self: flex-end;
+    }
+    footer {
+      display: flex;
       padding: 10px;
-      background: #161b22;
-      border-bottom: 1px solid #30363d;
+      background: #222;
+      border-top: 1px solid #333;
+      position: relative;
+      flex-wrap: wrap;
+      gap: 5px;
     }
-    .message {
-      margin: 8px 0;
-      padding: 6px 10px;
-      border-radius: 5px;
+    input {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      border-radius: 8px;
+      outline: none;
+      background: #333;
+      color: #fff;
+      min-width: 120px;
     }
-    .me {
-      background: #238636;
+    button {
+      background: #2563eb;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: 0.3s;
+      display: flex;
+      align-items: center;
+      font-size: 0.95em;
     }
-    .other {
-      background: #30363d;
+    button:hover { background: #1d4ed8; }
+    #toCodeBtn { background: #22c55e; }
+    #toCodeBtn:hover { background: #16a34a; }
+    #suggestions {
+      position: absolute;
+      bottom: 50px;
+      left: 10px;
+      background: #222;
+      border-radius: 8px;
+      border: 1px solid #333;
+      display: none;
+      flex-direction: column;
+      width: 200px;
+      z-index: 10;
+    }
+    .suggestion {
+      padding: 8px;
+      cursor: pointer;
+      border-bottom: 1px solid #333;
+    }
+    .suggestion:last-child { border-bottom: none; }
+    .suggestion:hover { background: #333; }
+    #typingIndicator {
+      font-size: 0.8em;
+      color: #aaa;
+      padding: 0 15px 6px;
+      min-height: 16px;
+    }
+    @media (max-width: 600px) {
+      header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 5px;
+      }
+      footer {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      button {
+        width: 100%;
+        justify-content: center;
+      }
     }
   </style>
 </head>
 <body>
+  <header>
+    <span>💬 Coder Chat</span>
+    <span id="userInfo">🟢 Online: 0</span>
+    <button id="toCodeBtn">
+      <i data-feather="code" style="margin-right: 6px;"></i> Go to Code Page
+    </button>
+  </header>
 
-  <div id="user-info">Loading...</div>
-  <div id="chat-box"></div>
+  <div id="chatBox"></div>
+  <div id="typingIndicator"></div>
 
-  <div style="max-width:700px;margin:10px auto;display:flex;">
-    <input id="msg-input" placeholder="Type message..." />
-    <button id="send-btn">Send</button>
-  </div>
-  <div id="typing"></div>
+  <footer>
+    <input id="msgInput" placeholder="Type a message...">
+    <button id="sendBtn"><i data-feather="send"></i></button>
+    <div id="suggestions"></div>
+  </footer>
 
   <script>
-    // ---------- Ask for name first ----------
-    function getCookie(name) {
-      const value = `; ${document.cookie}`;
-      const parts = value.split(`; ${name}=`);
-      if (parts.length === 2) return parts.pop().split(";").shift();
-    }
-
-    let username = getCookie("username") || localStorage.getItem("username");
-
-    while (!username || username.trim() === "" || username.trim().toLowerCase() === "coder") {
-      username = prompt("Enter your name (e.g., Sakshi, Nikhil):")?.trim();
-    }
-
-    document.cookie = `username=${username}; path=/; max-age=${60 * 60 * 24 * 30}`;
-    localStorage.setItem("username", username);
-
-    const chatBox = document.getElementById("chat-box");
-    const msgInput = document.getElementById("msg-input");
-    const sendBtn = document.getElementById("send-btn");
-    const typingIndicator = document.getElementById("typing");
-    const userInfo = document.getElementById("user-info");
-
-    userInfo.textContent = `🟢 ${username} | Chat started`;
-
-    // ---------- Firebase Setup ----------
+    // --- Firebase Setup ---
     const firebaseConfig = {
       apiKey: "AIzaSyCQOhn1RMCnGbtYyJbl_KyHwWzftsn44tk",
       authDomain: "social-516f8.firebaseapp.com",
@@ -118,7 +159,49 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    // ---------- Online users ----------
+    const chatBox = document.getElementById("chatBox");
+    const msgInput = document.getElementById("msgInput");
+    const sendBtn = document.getElementById("sendBtn");
+    const toCodeBtn = document.getElementById("toCodeBtn");
+    const suggestions = document.getElementById("suggestions");
+    const typingIndicator = document.getElementById("typingIndicator");
+    const userInfo = document.getElementById("userInfo");
+    const ADMIN_PASS = "Sakshi";
+
+    // --- Username setup ---
+    function getCookie(name) {
+      const value = `; ${document.cookie}`;
+      const parts = value.split(`; ${name}=`);
+      if (parts.length === 2) return parts.pop().split(";").shift();
+    }
+
+    let username = getCookie("username") || localStorage.getItem("username");
+    while (!username || username.trim() === "") {
+      username = prompt("Enter your name (e.g., Coder):") || "Coder";
+      document.cookie = `username=${username}; path=/; max-age=${60 * 60 * 24 * 30}`;
+      localStorage.setItem("username", username);
+    }
+
+    // --- Page Navigation ---
+    toCodeBtn.onclick = () => window.location.href = "code.html";
+
+    // --- Typing Indicator ---
+    let typingTimeout;
+    msgInput.addEventListener("input", () => {
+      db.ref("typing/" + username).set(true);
+      clearTimeout(typingTimeout);
+      typingTimeout = setTimeout(() => db.ref("typing/" + username).remove(), 1500);
+    });
+
+    db.ref("typing").on("value", (snapshot) => {
+      const typers = snapshot.val() || {};
+      const others = Object.keys(typers).filter((n) => n !== username);
+      typingIndicator.textContent = others.length
+        ? `${others.join(", ")} typing...`
+        : "";
+    });
+
+    // --- Online Users (Presence system) ---
     const connectedRef = firebase.database().ref(".info/connected");
     const userRef = db.ref("online/" + username);
 
@@ -131,50 +214,72 @@
 
     db.ref("online").on("value", (snapshot) => {
       const users = snapshot.val() || {};
-      const count = Object.keys(users).length;
-      userInfo.textContent = `🟢 ${username} | Online: ${count}`;
+      userInfo.textContent = `🟢 Online: ${Object.keys(users).length}`;
     });
 
-    // ---------- Send message ----------
+    // --- Commands ---
+    const commands = ["/tasks", "/admin", "/code"];
+    msgInput.addEventListener("input", () => {
+      const value = msgInput.value.trim();
+      suggestions.innerHTML = "";
+      if (value.startsWith("/")) {
+        const filtered = commands.filter(cmd => cmd.startsWith(value));
+        if (filtered.length) {
+          suggestions.style.display = "flex";
+          filtered.forEach(cmd => {
+            const div = document.createElement("div");
+            div.className = "suggestion";
+            div.innerText = cmd;
+            div.onclick = () => {
+              msgInput.value = cmd + " ";
+              suggestions.style.display = "none";
+              msgInput.focus();
+            };
+            suggestions.appendChild(div);
+          });
+        } else suggestions.style.display = "none";
+      } else suggestions.style.display = "none";
+    });
+
+    // --- Send Message ---
     sendBtn.onclick = sendMessage;
-    msgInput.addEventListener("keypress", (e) => {
+    msgInput.addEventListener("keypress", e => {
       if (e.key === "Enter") sendMessage();
     });
 
     function sendMessage() {
-      const msg = msgInput.value.trim();
-      if (!msg) return;
-      db.ref("messages").push({
-        user: username,
-        text: msg,
-        time: Date.now()
-      });
+      const text = msgInput.value.trim();
+      if (!text) return;
+
+      if (text === "/tasks") { window.location.href = "tasks.html"; return; }
+      if (text === "/code") { window.location.href = "code.html"; return; }
+      if (text.startsWith("/admin")) {
+        const parts = text.split(" ");
+        if (parts[1] === ADMIN_PASS) window.location.href = "admin.html";
+        else alert("❌ Wrong or missing password. Use /admin Sakshi");
+        msgInput.value = "";
+        return;
+      }
+
+      const msgData = { name: username, text, time: Date.now() };
+      db.ref("chat").push(msgData);
       msgInput.value = "";
+      suggestions.style.display = "none";
+      db.ref("typing/" + username).remove();
     }
 
-    // ---------- Receive message ----------
-    db.ref("messages").on("child_added", (snapshot) => {
+    // --- Receive Messages ---
+    db.ref("chat").on("child_added", (snapshot) => {
       const msg = snapshot.val();
       const div = document.createElement("div");
-      div.classList.add("message", msg.user === username ? "me" : "other");
-      div.textContent = `${msg.user}: ${msg.text}`;
+      div.classList.add("msg");
+      if (msg.name === username) div.classList.add("self");
+      div.innerHTML = `<strong>${msg.name}:</strong> ${msg.text}`;
       chatBox.appendChild(div);
       chatBox.scrollTop = chatBox.scrollHeight;
     });
 
-    // ---------- Typing indicator ----------
-    let typingTimeout;
-    msgInput.addEventListener("input", () => {
-      db.ref("typing/" + username).set(true);
-      clearTimeout(typingTimeout);
-      typingTimeout = setTimeout(() => db.ref("typing/" + username).remove(), 1200);
-    });
-
-    db.ref("typing").on("value", (snapshot) => {
-      const typers = snapshot.val() || {};
-      const others = Object.keys(typers).filter((n) => n !== username);
-      typingIndicator.textContent = others.length ? `${others.join(", ")} typing...` : "";
-    });
+    feather.replace();
   </script>
 </body>
 </html>
