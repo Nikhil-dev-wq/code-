@@ -51,6 +51,7 @@
       padding: 10px;
       background: #222;
       border-top: 1px solid #333;
+      position: relative;
     }
     input {
       flex: 1;
@@ -74,11 +75,27 @@
       align-items: center;
     }
     button:hover { background: #1d4ed8; }
-    #toCodeBtn {
-      background: #22c55e;
-      margin-left: 0;
-    }
+    #toCodeBtn { background: #22c55e; margin-left: 0; }
     #toCodeBtn:hover { background: #16a34a; }
+    #suggestions {
+      position: absolute;
+      bottom: 50px;
+      left: 10px;
+      background: #222;
+      border-radius: 8px;
+      border: 1px solid #333;
+      display: none;
+      flex-direction: column;
+      width: 200px;
+      z-index: 10;
+    }
+    .suggestion {
+      padding: 8px;
+      cursor: pointer;
+      border-bottom: 1px solid #333;
+    }
+    .suggestion:last-child { border-bottom: none; }
+    .suggestion:hover { background: #333; }
   </style>
 </head>
 <body>
@@ -90,9 +107,11 @@
   </header>
 
   <div id="chatBox"></div>
+
   <footer>
     <input id="msgInput" placeholder="Type a message...">
     <button id="sendBtn"><i data-feather="send"></i></button>
+    <div id="suggestions"></div>
   </footer>
 
   <script>
@@ -113,14 +132,38 @@
     const msgInput = document.getElementById("msgInput");
     const sendBtn = document.getElementById("sendBtn");
     const toCodeBtn = document.getElementById("toCodeBtn");
+    const suggestions = document.getElementById("suggestions");
     const username = "Coder"; // Default name
+    const ADMIN_PASS = "1234";
 
-    // Go to Code Page
-    toCodeBtn.onclick = () => {
-      window.location.href = "code.html"; // Change to your actual code page filename
-    };
+    // --- Page Navigation ---
+    toCodeBtn.onclick = () => { window.location.href = "code.html"; };
 
-    // Send message
+    // --- Auto Suggestions ---
+    const commands = ["/tasks", "/admin", "/code"];
+    msgInput.addEventListener("input", () => {
+      const value = msgInput.value.trim();
+      suggestions.innerHTML = "";
+      if (value.startsWith("/")) {
+        const filtered = commands.filter(cmd => cmd.startsWith(value));
+        if (filtered.length) {
+          suggestions.style.display = "flex";
+          filtered.forEach(cmd => {
+            const div = document.createElement("div");
+            div.className = "suggestion";
+            div.innerText = cmd;
+            div.onclick = () => {
+              msgInput.value = cmd + " ";
+              suggestions.style.display = "none";
+              msgInput.focus();
+            };
+            suggestions.appendChild(div);
+          });
+        } else suggestions.style.display = "none";
+      } else suggestions.style.display = "none";
+    });
+
+    // --- Send Message ---
     sendBtn.onclick = sendMessage;
     msgInput.addEventListener("keypress", e => {
       if (e.key === "Enter") sendMessage();
@@ -129,16 +172,37 @@
     function sendMessage() {
       const text = msgInput.value.trim();
       if (!text) return;
-      const msgData = {
-        name: username,
-        text,
-        time: Date.now()
-      };
+
+      // Commands
+      if (text === "/tasks") {
+        window.location.href = "tasks.html";
+        msgInput.value = "";
+        return;
+      }
+      if (text === "/code") {
+        window.location.href = "code.html";
+        msgInput.value = "";
+        return;
+      }
+      if (text.startsWith("/admin")) {
+        const parts = text.split(" ");
+        if (parts.length > 1 && parts[1] === ADMIN_PASS) {
+          window.location.href = "admin.html";
+        } else {
+          alert("❌ Wrong or missing password. Use /admin 1234");
+        }
+        msgInput.value = "";
+        return;
+      }
+
+      // Normal message
+      const msgData = { name: username, text, time: Date.now() };
       db.ref("chat").push(msgData);
       msgInput.value = "";
+      suggestions.style.display = "none";
     }
 
-    // Receive messages
+    // --- Receive Messages ---
     db.ref("chat").on("child_added", snapshot => {
       const msg = snapshot.val();
       const div = document.createElement("div");
