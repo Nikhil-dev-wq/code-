@@ -109,7 +109,7 @@ import builtins, js_input
 builtins.input = js_input.input
 ${code}
 `);
-          if (result !== undefined) term.innerHTML += result + "\n";
+          term.innerHTML = result;
         }
       } catch (err) {
         term.innerHTML += `❌ Error: ${err}\n`;
