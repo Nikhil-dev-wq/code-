@@ -23,8 +23,13 @@
       justify-content: space-between;
       align-items: center;
       padding: 10px 15px;
-      font-size: 1.2em;
+      font-size: 1.1em;
       border-bottom: 1px solid #333;
+      flex-wrap: wrap;
+    }
+    #userInfo {
+      font-size: 0.85em;
+      color: #aaa;
     }
     #chatBox {
       flex: 1;
@@ -52,6 +57,8 @@
       background: #222;
       border-top: 1px solid #333;
       position: relative;
+      flex-wrap: wrap;
+      gap: 5px;
     }
     input {
       flex: 1;
@@ -61,6 +68,7 @@
       outline: none;
       background: #333;
       color: #fff;
+      min-width: 120px;
     }
     button {
       background: #2563eb;
@@ -68,14 +76,14 @@
       border: none;
       padding: 10px 15px;
       border-radius: 8px;
-      margin-left: 8px;
       cursor: pointer;
       transition: 0.3s;
       display: flex;
       align-items: center;
+      font-size: 0.95em;
     }
     button:hover { background: #1d4ed8; }
-    #toCodeBtn { background: #22c55e; margin-left: 0; }
+    #toCodeBtn { background: #22c55e; }
     #toCodeBtn:hover { background: #16a34a; }
     #suggestions {
       position: absolute;
@@ -96,17 +104,40 @@
     }
     .suggestion:last-child { border-bottom: none; }
     .suggestion:hover { background: #333; }
+    #typingIndicator {
+      font-size: 0.8em;
+      color: #aaa;
+      padding: 0 15px 6px;
+      min-height: 16px;
+    }
+    @media (max-width: 600px) {
+      header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 5px;
+      }
+      footer {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      button {
+        width: 100%;
+        justify-content: center;
+      }
+    }
   </style>
 </head>
 <body>
   <header>
     <span>💬 Coder Chat</span>
+    <span id="userInfo">🟢 Online: 0</span>
     <button id="toCodeBtn">
       <i data-feather="code" style="margin-right: 6px;"></i> Go to Code Page
     </button>
   </header>
 
   <div id="chatBox"></div>
+  <div id="typingIndicator"></div>
 
   <footer>
     <input id="msgInput" placeholder="Type a message...">
@@ -133,25 +164,52 @@
     const sendBtn = document.getElementById("sendBtn");
     const toCodeBtn = document.getElementById("toCodeBtn");
     const suggestions = document.getElementById("suggestions");
+    const typingIndicator = document.getElementById("typingIndicator");
+    const userInfo = document.getElementById("userInfo");
     const ADMIN_PASS = "Sakshi";
 
-    // --- Username from Cookie ---
+    // --- Username ---
     function getCookie(name) {
       const value = `; ${document.cookie}`;
       const parts = value.split(`; ${name}=`);
       if (parts.length === 2) return parts.pop().split(";").shift();
     }
-
     let username = getCookie("username");
     if (!username) {
       username = prompt("Enter your name (e.g., Coder):") || "Coder";
       document.cookie = `username=${username}; path=/; max-age=${60 * 60 * 24 * 30}`;
     }
 
-    // --- Page Navigation ---
+    // --- Page Nav ---
     toCodeBtn.onclick = () => { window.location.href = "code.html"; };
 
-    // --- Auto Suggestions ---
+    // --- Typing Indicator ---
+    let typingTimeout;
+    msgInput.addEventListener("input", () => {
+      db.ref("typing/" + username).set(true);
+      clearTimeout(typingTimeout);
+      typingTimeout = setTimeout(() => db.ref("typing/" + username).remove(), 1500);
+    });
+
+    db.ref("typing").on("value", snapshot => {
+      const typers = snapshot.val() || {};
+      const others = Object.keys(typers).filter(n => n !== username);
+      typingIndicator.textContent = others.length
+        ? `${others.join(", ")} typing...`
+        : "";
+    });
+
+    // --- Online Users ---
+    const userRef = db.ref("online/" + username);
+    userRef.set(true);
+    userRef.onDisconnect().remove();
+
+    db.ref("online").on("value", snapshot => {
+      const users = snapshot.val() || {};
+      userInfo.textContent = "🟢 Online: " + Object.keys(users).length;
+    });
+
+    // --- Commands ---
     const commands = ["/tasks", "/admin", "/code"];
     msgInput.addEventListener("input", () => {
       const value = msgInput.value.trim();
@@ -185,33 +243,21 @@
       const text = msgInput.value.trim();
       if (!text) return;
 
-      // Commands
-      if (text === "/tasks") {
-        window.location.href = "tasks.html";
-        msgInput.value = "";
-        return;
-      }
-      if (text === "/code") {
-        window.location.href = "code.html";
-        msgInput.value = "";
-        return;
-      }
+      if (text === "/tasks") { window.location.href = "tasks.html"; return; }
+      if (text === "/code") { window.location.href = "code.html"; return; }
       if (text.startsWith("/admin")) {
         const parts = text.split(" ");
-        if (parts.length > 1 && parts[1] === ADMIN_PASS) {
-          window.location.href = "admin.html";
-        } else {
-          alert("❌ Wrong or missing password. Use /admin 1234");
-        }
+        if (parts[1] === ADMIN_PASS) window.location.href = "admin.html";
+        else alert("❌ Wrong or missing password. Use /admin Sakshi");
         msgInput.value = "";
         return;
       }
 
-      // Normal message
       const msgData = { name: username, text, time: Date.now() };
       db.ref("chat").push(msgData);
       msgInput.value = "";
       suggestions.style.display = "none";
+      db.ref("typing/" + username).remove();
     }
 
     // --- Receive Messages ---
