@@ -12,7 +12,7 @@
   <!-- Monaco -->
   <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.33.0/min/vs/loader.js"></script>
 
-  <!-- Feather Icons -->
+  <!-- Icons -->
   <script src="https://unpkg.com/feather-icons"></script>
 
   <style>
@@ -45,57 +45,80 @@
   </header>
 
   <div id="editor"></div>
+
   <div class="controls">
     <button id="runBtn" disabled><i data-feather="play"></i> Run Code</button>
     <button id="toggleBtn"><i data-feather="eye"></i> View Only</button>
   </div>
 
   <div id="terminal"></div>
-  <input id="terminal-input" placeholder="Type commands or input() responses..." disabled />
+  <input id="terminal-input" placeholder="Type input() values or pip commands here..." disabled />
 
-  <!-- Load Pyodide -->
   <script type="module">
     import { loadPyodide } from "https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.mjs";
 
-    const runBtn = document.getElementById("runBtn");
     const term = document.getElementById("terminal");
-    const input = document.getElementById("terminal-input");
+    const inputBox = document.getElementById("terminal-input");
+    const runBtn = document.getElementById("runBtn");
+    let pyodide, waitingInput = null;
 
-    let pyodide;
-
-    term.innerHTML = "Loading Python environment...\n";
-    pyodide = await loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.25.1/full/" });
-    term.innerHTML += "✅ Pyodide ready! You can now run Python code.\n";
-    runBtn.disabled = false;
-    input.disabled = false;
-
-    // Handle Python input() simulation
-    let waitingInputResolve = null;
-    async function getUserInput(promptText) {
-      term.innerHTML += promptText;
-      input.disabled = false;
-      return new Promise((resolve) => {
-        waitingInputResolve = resolve;
-      });
+    async function initPyodide() {
+      term.innerHTML = "Loading Python environment...\n";
+      pyodide = await loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.25.1/full/" });
+      term.innerHTML += "✅ Pyodide ready! You can now run Python code.\n";
+      runBtn.disabled = false;
+      inputBox.disabled = false;
     }
 
-    input.addEventListener("keydown", async (e) => {
-      if (e.key === "Enter" && waitingInputResolve) {
-        const val = input.value.trim();
-        input.value = "";
+    await initPyodide();
+
+    // Simulated input() for Python
+    async function jsInput(promptText) {
+      term.innerHTML += promptText;
+      inputBox.disabled = false;
+      return new Promise((resolve) => (waitingInput = resolve));
+    }
+
+    inputBox.addEventListener("keydown", async (e) => {
+      if (e.key === "Enter" && waitingInput) {
+        const val = inputBox.value.trim();
+        inputBox.value = "";
         term.innerHTML += val + "\n";
-        input.disabled = true;
-        waitingInputResolve(val);
-        waitingInputResolve = null;
+        inputBox.disabled = true;
+        waitingInput(val);
+        waitingInput = null;
       }
     });
 
-    // Expose input() override
-    pyodide.registerJsModule("js_input", { input: getUserInput });
+    async function runPython(code) {
+      term.innerHTML += "\n> Running...\n";
+      try {
+        pyodide.registerJsModule("js_input", { input: jsInput });
+
+        if (code.trim().startsWith("pip install")) {
+          const pkg = code.split(" ")[2];
+          term.innerHTML += `Installing ${pkg}...\n`;
+          await pyodide.runPythonAsync(`import micropip; await micropip.install('${pkg}')`);
+          term.innerHTML += `✅ ${pkg} installed!\n`;
+        } else {
+          const result = await pyodide.runPythonAsync(`
+import builtins, js_input
+builtins.input = js_input.input
+${code}
+`);
+          if (result !== undefined) term.innerHTML += result + "\n";
+        }
+      } catch (err) {
+        term.innerHTML += `❌ Error: ${err}\n`;
+      }
+      term.scrollTop = term.scrollHeight;
+    }
+
+    window.runPython = runPython;
   </script>
 
   <script>
-    // Firebase
+    // Firebase setup
     const firebaseConfig = {
       apiKey: "AIzaSyCQOhn1RMCnGbtYyJbl_KyHwWzftsn44tk",
       authDomain: "social-516f8.firebaseapp.com",
@@ -114,7 +137,7 @@
     require.config({ paths: { 'vs': 'https://cdn.jsdelivr.net/npm/monaco-editor@0.33.0/min/vs' } });
     require(["vs/editor/editor.main"], function () {
       editor = monaco.editor.create(document.getElementById("editor"), {
-        value: "# Example\nname = input('Enter your name: ')\nprint('Hello,', name)",
+        value: "# Try pip install numpy\nimport numpy as np\nprint(np.arange(5))\nname = input('Your name: ')\nprint('Hello', name)",
         language: "python",
         theme: "vs-dark",
         automaticLayout: true,
@@ -122,10 +145,7 @@
 
       editor.onDidChangeModelContent(() => {
         if (viewOnly || updating) return;
-        codeRef.set({
-          code: editor.getValue(),
-          cursor: editor.getPosition()
-        });
+        codeRef.set({ code: editor.getValue(), cursor: editor.getPosition() });
       });
 
       codeRef.on("value", snap => {
@@ -143,29 +163,12 @@
       });
     });
 
-    // Wait until Pyodide is ready
-    async function runPython(code) {
-      term.innerHTML += "\n> Running...\n";
-      try {
-        const result = await pyodide.runPythonAsync(`
-import builtins
-import js_input
-builtins.input = js_input.input
-${code}
-`);
-        if (result !== undefined) term.innerHTML += result + "\n";
-      } catch (err) {
-        term.innerHTML += `Error: ${err}\n`;
-      }
-      term.scrollTop = term.scrollHeight;
-    }
-
     runBtn.onclick = async () => {
       const code = editor.getValue();
       await runPython(code);
     };
 
-    document.getElementById("chatBtn").onclick = () => window.location.href = "index.html";
+    document.getElementById("chatBtn").onclick = () => (window.location.href = "index.html");
 
     const toggleBtn = document.getElementById("toggleBtn");
     toggleBtn.addEventListener("click", () => {
@@ -181,6 +184,5 @@ ${code}
   </script>
 </body>
 </html>
-
 
 
