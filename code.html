@@ -1,121 +1,183 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Python Live Editor with Terminal</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Live Share Editor</title>
 
-  <!-- Pyodide -->
-  <script type="module" src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.mjs"></script>
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-database-compat.js"></script>
+
+  <!-- Monaco -->
+  <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.33.0/min/vs/loader.js"></script>
+
+  <!-- Icons -->
+  <script src="https://unpkg.com/feather-icons"></script>
 
   <style>
-    body {
-      background: #0d0d0d; color: #fff;
-      font-family: monospace; margin: 0;
-    }
+    body { background:#111; color:#fff; margin:0; font-family:sans-serif; }
     header {
-      background: #111; padding: 10px 15px;
-      border-bottom: 1px solid #333;
-      display: flex; justify-content: space-between; align-items: center;
+      background:#222; display:flex; justify-content:space-between; align-items:center;
+      padding:10px 15px; border-bottom:1px solid #333; font-size:1.1em;
     }
-    #editor { height: 55vh; border: 1px solid #333; }
-    #terminal {
-      background: #000; color: #0f0;
-      height: 35vh; overflow-y: auto; padding: 10px;
-      font-family: monospace;
-    }
-    #terminal-input {
-      width: 100%; border: none; outline: none;
-      padding: 8px; font-family: monospace;
-      color: #0f0; background: #111;
-    }
+    #editor { height:70vh; border:1px solid #333; }
+    .controls { padding:10px; display:flex; gap:10px; }
     button {
-      background: #222; color: #fff;
-      border: none; padding: 8px 15px;
-      border-radius: 6px; cursor: pointer;
+      background:#333; color:#fff; border:none; border-radius:8px; padding:10px 15px;
+      cursor:pointer; transition:0.2s; display:flex; align-items:center; gap:5px;
     }
-    button:hover { background: #333; }
+    button:hover { background:#444; }
+    .active { background:#22c55e !important; }
+    #output {
+      background:#000; color:#0f0; font-family:monospace;
+      height:20vh; overflow-y:auto; padding:10px; border-top:1px solid #333;
+    }
+    #terminal {
+      background:#111; border-top:1px solid #333; padding:10px;
+    }
+    #termInput {
+      width:90%; background:#000; color:#0f0; border:none;
+      outline:none; padding:8px; margin-top:5px; font-family:monospace;
+    }
   </style>
 </head>
 <body>
   <header>
-    <span>💻 Python Live Editor</span>
-    <button id="runBtn">▶ Run</button>
+    <span>💻 True Live Share Editor</span>
+    <button id="chatBtn"><i data-feather="message-square"></i> Go to Chat</button>
   </header>
 
-  <textarea id="editor">
-import numpy as np
-print("NumPy loaded:", np.arange(5))
-name = input("Enter your name: ")
-print("Hello", name)
-  </textarea>
+  <div id="editor"></div>
 
-  <div id="terminal"></div>
-  <input id="terminal-input" placeholder="Type input() value here..." disabled />
+  <div class="controls">
+    <button id="runBtn"><i data-feather="play"></i> Run Code</button>
+    <button id="toggleBtn"><i data-feather="eye"></i> View Only</button>
+  </div>
 
-  <script type="module">
-    import { loadPyodide } from "https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.mjs";
+  <div id="output">Output will appear here...</div>
 
-    const term = document.getElementById("terminal");
-    const inputBox = document.getElementById("terminal-input");
-    const runBtn = document.getElementById("runBtn");
-    const editor = document.getElementById("editor");
+  <div id="terminal">
+    <div id="termLabel">➡️ Input:</div>
+    <input id="termInput" type="text" placeholder="Type your input...">
+  </div>
 
-    let pyodide, waitingInput = null;
+  <script>
+    // --- Firebase Setup ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyCQOhn1RMCnGbtYyJbl_KyHwWzftsn44tk",
+      authDomain: "social-516f8.firebaseapp.com",
+      databaseURL: "https://social-516f8-default-rtdb.firebaseio.com/",
+      projectId: "social-516f8",
+      storageBucket: "social-516f8.appspot.com",
+      messagingSenderId: "190734911459",
+      appId: "1:190734911459:web:ef79ce73f7dbdd617e50a8"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const codeRef = db.ref("liveCode");
 
-    // Load Pyodide + NumPy
-    async function init() {
-      term.textContent = "Loading Python...\n";
-      pyodide = await loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.25.1/full/" });
-      term.textContent += "✅ Pyodide ready!\nInstalling NumPy...\n";
-      await pyodide.loadPackage("numpy");
-      term.textContent += "✅ NumPy loaded!\nReady to run code.\n";
-      runBtn.disabled = false;
-    }
-    init();
+    let editor, updating = false;
+    let viewOnly = false;
 
-    // Handle Python input()
-    async function jsInput(promptText) {
-      term.innerHTML += promptText;
-      inputBox.disabled = false;
-      inputBox.focus();
-      return new Promise(resolve => waitingInput = resolve);
-    }
+    // --- Monaco Setup ---
+    require.config({ paths: { 'vs': 'https://cdn.jsdelivr.net/npm/monaco-editor@0.33.0/min/vs' } });
+    require(["vs/editor/editor.main"], function() {
+      editor = monaco.editor.create(document.getElementById("editor"), {
+        value: "# Real-time Python code sharing\nprint('Hello Live Share!')",
+        language: "python",
+        theme: "vs-dark",
+        automaticLayout: true
+      });
 
-    inputBox.addEventListener("keydown", e => {
-      if (e.key === "Enter" && waitingInput) {
-        const value = inputBox.value;
-        inputBox.value = "";
-        inputBox.disabled = true;
-        term.innerHTML += value + "\n";
-        waitingInput(value);
-        waitingInput = null;
-      }
+      // Update Firebase when typing
+      editor.onDidChangeModelContent(() => {
+        if (viewOnly || updating) return;
+        codeRef.set({
+          code: editor.getValue(),
+          cursor: editor.getPosition()
+        });
+      });
+
+      // Receive updates without resetting cursor
+      codeRef.on("value", snap => {
+        const val = snap.val();
+        if (!val) return;
+
+        const local = editor.getValue();
+        if (local !== val.code) {
+          const currentPos = editor.getPosition();
+          updating = true;
+          editor.setValue(val.code);
+          // Keep cursor position for viewer
+          if (viewOnly && val.cursor) editor.setPosition(val.cursor);
+          else editor.setPosition(currentPos);
+          updating = false;
+        }
+      });
     });
 
-    async function runPython(code) {
-      async function runPython(code) {
-  term.innerHTML = "";
-  try {
-    pyodide.registerJsModule("js_input", { input: jsInput });
-    const wrapped = `
-import builtins, js_input
-builtins.input = js_input.input
-${code}
-`;
-    const result = await pyodide.runPythonAsync(wrapped);
-    if (result !== undefined && result !== null) {
-      term.innerHTML += result + "\n";
-    }
-  } catch (err) {
-    term.innerHTML += `❌ Error: ${err}\n`;
-  }
-  term.scrollTop = term.scrollHeight;
-}
+    // --- Run Python Code (with Input Support) ---
+    const output = document.getElementById("output");
+    const runBtn = document.getElementById("runBtn");
+    const termInput = document.getElementById("termInput");
 
+    runBtn.addEventListener("click", () => {
+      output.innerHTML = "Running...\n";
+      const code = editor.getValue();
+      termInput.value = "";
 
-    runBtn.onclick = () => runPython(editor.value);
+      Sk.configure({
+        output: text => output.innerHTML += text,
+        read: name => {
+          if (!Sk.builtinFiles || !Sk.builtinFiles["files"][name])
+            throw "File not found: " + name;
+          return Sk.builtinFiles["files"][name];
+        },
+        inputfun: function(prompt) {
+          return new Promise(resolve => {
+            output.innerHTML += prompt;
+            termInput.focus();
+            termInput.onkeydown = function(e) {
+              if (e.key === "Enter") {
+                const val = termInput.value;
+                termInput.value = "";
+                output.innerHTML += val + "\n";
+                resolve(val);
+              }
+            };
+          });
+        },
+        inputfunTakesPrompt: true
+      });
+
+      Sk.misceval.asyncToPromise(() =>
+        Sk.importMainWithBody("<stdin>", false, code, true)
+      ).catch(err => output.innerHTML += `<span style="color:red">${err}</span>`);
+    });
+
+    // --- Toggle Edit/View ---
+    const toggleBtn = document.getElementById("toggleBtn");
+    toggleBtn.addEventListener("click", () => {
+      viewOnly = !viewOnly;
+      editor.updateOptions({ readOnly: viewOnly });
+      toggleBtn.innerHTML = viewOnly
+        ? `<i data-feather="edit-3"></i> Edit Mode`
+        : `<i data-feather="eye"></i> View Only`;
+      feather.replace();
+    });
+
+    // --- Go to Chat ---
+    document.getElementById("chatBtn").onclick = () => {
+      window.location.href = "index.html";
+    };
+
+    feather.replace();
   </script>
+
+  <!-- Skulpt -->
+  <script src="https://cdn.jsdelivr.net/npm/skulpt@1.2.0/dist/skulpt.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/skulpt@1.2.0/dist/skulpt-stdlib.js"></script>
 </body>
 </html>
 
