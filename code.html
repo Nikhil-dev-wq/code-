@@ -113,7 +113,7 @@
       const code = editor.getValue();
   
       Sk.configure({
-        output: text =>  output.innerHtml = text,
+        output: text =>  output.innerHTML = text,
         read: name => {
           if (!Sk.builtinFiles || !Sk.builtinFiles["files"][name])
             throw "File not found: " + name;
