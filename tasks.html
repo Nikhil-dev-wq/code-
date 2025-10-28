@@ -50,12 +50,13 @@
   <div id="output">Output will appear here...</div>
 
   <div id="feedbackBox">
-    <h3>📬 Feedback from Admin</h3>
+    <h3>📬 Feedback</h3>
     <p id="feedbackText">No feedback yet.</p>
     <div id="rating" class="stars"></div>
   </div>
 
   <script>
+  // --- Firebase Setup ---
   const firebaseConfig = {
     apiKey: "AIzaSyCQOhn1RMCnGbtYyJbl_KyHwWzftsn44tk",
     authDomain: "social-516f8.firebaseapp.com",
@@ -78,8 +79,8 @@
   const username = localStorage.getItem("username") || prompt("Enter your name:");
   localStorage.setItem("username", username);
 
-  // --- Load tasks ---
-  db.ref("tasks").on("value", (snapshot) => {
+  // --- Load tasks (only one active) ---
+  db.ref("tasks").limitToLast(1).on("value", (snapshot) => {
     const data = snapshot.val();
     taskList.innerHTML = "";
     if (!data) {
@@ -89,16 +90,16 @@
       document.getElementById("submitBtn").style.display = "none";
       return;
     }
+
     document.getElementById("editor").style.display = "block";
     document.getElementById("runBtn").style.display = "inline-block";
     document.getElementById("submitBtn").style.display = "inline-block";
 
-    Object.values(data).forEach((task) => {
-      const div = document.createElement("div");
-      div.className = "task";
-      div.innerHTML = `<h3>${task.title}</h3><p>${task.description}</p>`;
-      taskList.appendChild(div);
-    });
+    const task = Object.values(data)[0];
+    const div = document.createElement("div");
+    div.className = "task";
+    div.innerHTML = `<h3>${task.title}</h3><p>${task.description}</p>`;
+    taskList.appendChild(div);
   });
 
   // --- Monaco Editor ---
@@ -132,13 +133,13 @@
     const code = editor.getValue().trim();
     if (!code) return alert("⚠ Please write some code before submitting!");
     if (confirm("Are you sure you want to submit your code? Once submitted, you cannot edit it.")) {
-      const ref = db.ref("submissions").push({
+      db.ref("submissions").push({
         user: username,
         code,
         time: Date.now(),
       });
       alert("✅ Code submitted successfully!");
-      editor.updateOptions({ readOnly: true }); // make editor uneditable after submit
+      editor.updateOptions({ readOnly: true });
       document.getElementById("submitBtn").disabled = true;
       document.getElementById("runBtn").disabled = true;
     }
@@ -155,7 +156,7 @@
     }
   });
 
-  // --- Feedback Watch (only for user's submissions) ---
+  // --- Feedback Watch (for user's submissions) ---
   db.ref("submissions").orderByChild("user").equalTo(username).on("child_added", (snapshot) => {
     const id = snapshot.key;
     const ref = db.ref("submissions/" + id);
@@ -163,7 +164,6 @@
     ref.on("value", (snap) => {
       const data = snap.val();
       if (!data) {
-        // if deleted by admin
         feedbackBox.style.display = "none";
         editor.updateOptions({ readOnly: false });
         document.getElementById("submitBtn").disabled = false;
@@ -173,12 +173,13 @@
 
       if (data.feedback || data.rating) {
         feedbackBox.style.display = "block";
-        feedbackText.innerHTML = `<b>👤 ${data.name}</b><br>${data.feedback || "No feedback yet."}`;
+        const adminName = data.feedbackBy || "Admin";
+        feedbackText.innerHTML = `<b>📬 Feedback from ${adminName}</b><br>${data.feedback || "No feedback yet."}`;
         ratingDiv.innerHTML = data.rating ? "⭐".repeat(data.rating) + ` (${data.rating}/5)` : "";
       }
     });
   });
-</script>
-
+  </script>
 </body>
 </html>
+
