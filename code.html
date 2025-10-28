@@ -65,17 +65,20 @@
     async function initPyodide() {
       term.innerHTML = "Loading Python environment...\n";
       pyodide = await loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.25.1/full/" });
-      term.innerHTML += "✅ Pyodide ready! You can now run Python code.\n";
+      term.innerHTML += "✅ Pyodide ready!\nInstalling numpy...\n";
+      await pyodide.loadPackage("numpy");
+      term.innerHTML += "✅ NumPy loaded!\nYou can now run Python code.\n";
       runBtn.disabled = false;
       inputBox.disabled = false;
     }
 
     await initPyodide();
 
-    // Simulated input() for Python
+    // Custom input() support
     async function jsInput(promptText) {
       term.innerHTML += promptText;
       inputBox.disabled = false;
+      inputBox.focus();
       return new Promise((resolve) => (waitingInput = resolve));
     }
 
@@ -137,7 +140,7 @@ ${code}
     require.config({ paths: { 'vs': 'https://cdn.jsdelivr.net/npm/monaco-editor@0.33.0/min/vs' } });
     require(["vs/editor/editor.main"], function () {
       editor = monaco.editor.create(document.getElementById("editor"), {
-        value: "# Try pip install numpy\nimport numpy as np\nprint(np.arange(5))\nname = input('Your name: ')\nprint('Hello', name)",
+        value: "# NumPy is ready!\nimport numpy as np\nprint(np.arange(5))\nname = input('Your name: ')\nprint('Hello', name)",
         language: "python",
         theme: "vs-dark",
         automaticLayout: true,
@@ -184,5 +187,6 @@ ${code}
   </script>
 </body>
 </html>
+
 
 
