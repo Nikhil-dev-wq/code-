@@ -133,8 +133,20 @@
     const sendBtn = document.getElementById("sendBtn");
     const toCodeBtn = document.getElementById("toCodeBtn");
     const suggestions = document.getElementById("suggestions");
-    const username = "Coder"; // Default name
     const ADMIN_PASS = "Sakshi";
+
+    // --- Username from Cookie ---
+    function getCookie(name) {
+      const value = `; ${document.cookie}`;
+      const parts = value.split(`; ${name}=`);
+      if (parts.length === 2) return parts.pop().split(";").shift();
+    }
+
+    let username = getCookie("username");
+    if (!username) {
+      username = prompt("Enter your name (e.g., Coder):") || "Coder";
+      document.cookie = `username=${username}; path=/; max-age=${60 * 60 * 24 * 30}`;
+    }
 
     // --- Page Navigation ---
     toCodeBtn.onclick = () => { window.location.href = "code.html"; };
@@ -217,4 +229,5 @@
   </script>
 </body>
 </html>
+
 
