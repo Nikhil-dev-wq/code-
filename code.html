@@ -110,6 +110,7 @@
     const runBtn = document.getElementById("runBtn");
     runBtn.addEventListener("click", () => {
       const code = editor.getValue();
+      output.innerHtml = "";
       Sk.configure({
         output: text => output.innerHTML += text,
         read: name => {
