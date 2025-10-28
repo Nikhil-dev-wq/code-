@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tasks</title>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-database-compat.js"></script>
+
+  <!-- Monaco Editor -->
+  <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.33.0/min/vs/loader.js"></script>
+
+  <!-- Skulpt (Python Runner) -->
+  <script src="https://cdn.jsdelivr.net/npm/skulpt@1.2.0/dist/skulpt.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/skulpt@1.2.0/dist/skulpt-stdlib.js"></script>
+
+  <style>
+    body { background: #111; color: #fff; font-family: sans-serif; padding: 20px; }
+    h2 { text-align: center; color: #22c55e; }
+    .task { background: #222; padding: 15px; border-radius: 10px; margin-bottom: 10px; border-left: 4px solid #22c55e; }
+    #editor { height: 300px; border: 1px solid #333; margin-top: 15px; }
+    #output { background: #000; color: #0f0; padding: 10px; height: 150px; overflow-y: auto; font-family: monospace; margin-top: 10px; }
+    .btns { margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap; }
+    button { background: #2563eb; color: #fff; border: none; padding: 10px 15px; border-radius: 8px; cursor: pointer; }
+    button:hover { background: #1d4ed8; }
+    #notification { background: #f59e0b; color: #111; padding: 10px; border-radius: 8px; margin-bottom: 10px; display: none; text-align: center; }
+    #feedbackBox { background: #1b1b1b; padding: 15px; border-radius: 10px; margin-top: 20px; border-left: 4px solid #22c55e; display: none; }
+    .stars { color: gold; font-size: 20px; margin-top: 5px; }
+  </style>
+</head>
+<body>
+  <div class="btns">
+    <button onclick="window.location.href='index.html'">💬 Go to Chat</button>
+  </div>
+
+  <div id="notification">💬 New message received!</div>
+  <h2>📋 Assigned Task</h2>
+  <div id="taskList">Loading tasks...</div>
+
+  <h3>💻 Your Code:</h3>
+  <div id="editor"></div>
+
+  <div class="btns">
+    <button id="runBtn">▶ Run Code</button>
+    <button id="submitBtn">✅ Submit</button>
+  </div>
+
+  <div id="output">Output will appear here...</div>
+
+  <div id="feedbackBox">
+    <h3>📬 Feedback from Admin</h3>
+    <p id="feedbackText">No feedback yet.</p>
+    <div id="rating" class="stars"></div>
+  </div>
+
+  <script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyCQOhn1RMCnGbtYyJbl_KyHwWzftsn44tk",
+    authDomain: "social-516f8.firebaseapp.com",
+    databaseURL: "https://social-516f8-default-rtdb.firebaseio.com/",
+    projectId: "social-516f8",
+    storageBucket: "social-516f8.appspot.com",
+    messagingSenderId: "190734911459",
+    appId: "1:190734911459:web:ef79ce73f7dbdd617e50a8"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+
+  const taskList = document.getElementById("taskList");
+  const output = document.getElementById("output");
+  const notification = document.getElementById("notification");
+  const feedbackBox = document.getElementById("feedbackBox");
+  const feedbackText = document.getElementById("feedbackText");
+  const ratingDiv = document.getElementById("rating");
+
+  const username = localStorage.getItem("username") || prompt("Enter your name:");
+  localStorage.setItem("username", username);
+
+  // --- Load tasks ---
+  db.ref("tasks").on("value", (snapshot) => {
+    const data = snapshot.val();
+    taskList.innerHTML = "";
+    if (!data) {
+      taskList.innerHTML = "<p>No task assigned yet.</p>";
+      document.getElementById("editor").style.display = "none";
+      document.getElementById("runBtn").style.display = "none";
+      document.getElementById("submitBtn").style.display = "none";
+      return;
+    }
+    document.getElementById("editor").style.display = "block";
+    document.getElementById("runBtn").style.display = "inline-block";
+    document.getElementById("submitBtn").style.display = "inline-block";
+
+    Object.values(data).forEach((task) => {
+      const div = document.createElement("div");
+      div.className = "task";
+      div.innerHTML = `<h3>${task.title}</h3><p>${task.description}</p>`;
+      taskList.appendChild(div);
+    });
+  });
+
+  // --- Monaco Editor ---
+  let editor;
+  require.config({ paths: { 'vs': 'https://cdn.jsdelivr.net/npm/monaco-editor@0.33.0/min/vs' }});
+  require(["vs/editor/editor.main"], function() {
+    editor = monaco.editor.create(document.getElementById("editor"), {
+      value: "# Write your Python solution here\n",
+      language: "python",
+      theme: "vs-dark",
+      automaticLayout: true
+    });
+  });
+
+  // --- Run Code ---
+  document.getElementById("runBtn").onclick = () => {
+    output.innerHTML = "";
+    const code = editor.getValue();
+    function outf(text) { output.innerHTML += text; }
+    function builtinRead(x) {
+      if (!Sk.builtinFiles || !Sk.builtinFiles["files"][x]) throw "File not found: " + x;
+      return Sk.builtinFiles["files"][x];
+    }
+    Sk.configure({ output: outf, read: builtinRead });
+    Sk.misceval.asyncToPromise(() => Sk.importMainWithBody("<stdin>", false, code, true))
+      .catch(err => output.innerHTML = `<span style='color:red'>${err}</span>`);
+  };
+
+  // --- Submit Code ---
+  document.getElementById("submitBtn").onclick = () => {
+    const code = editor.getValue().trim();
+    if (!code) return alert("⚠ Please write some code before submitting!");
+    if (confirm("Are you sure you want to submit your code? Once submitted, you cannot edit it.")) {
+      const ref = db.ref("submissions").push({
+        user: username,
+        code,
+        time: Date.now(),
+      });
+      alert("✅ Code submitted successfully!");
+      editor.updateOptions({ readOnly: true }); // make editor uneditable after submit
+      document.getElementById("submitBtn").disabled = true;
+      document.getElementById("runBtn").disabled = true;
+    }
+  };
+
+  // --- Chat Notification ---
+  let lastSeenTime = Date.now();
+  db.ref("chat").limitToLast(1).on("child_added", (snapshot) => {
+    const msg = snapshot.val();
+    if (msg && msg.time && msg.time > lastSeenTime) {
+      notification.style.display = "block";
+      notification.innerText = `💬 ${msg.name} sent: "${msg.text}"`;
+      setTimeout(() => notification.style.display = "none", 5000);
+    }
+  });
+
+  // --- Feedback Watch (only for user's submissions) ---
+  db.ref("submissions").orderByChild("user").equalTo(username).on("child_added", (snapshot) => {
+    const id = snapshot.key;
+    const ref = db.ref("submissions/" + id);
+
+    ref.on("value", (snap) => {
+      const data = snap.val();
+      if (!data) {
+        // if deleted by admin
+        feedbackBox.style.display = "none";
+        editor.updateOptions({ readOnly: false });
+        document.getElementById("submitBtn").disabled = false;
+        document.getElementById("runBtn").disabled = false;
+        return;
+      }
+
+      if (data.feedback || data.rating) {
+        feedbackBox.style.display = "block";
+        feedbackText.innerHTML = `<b>👤 ${data.name}</b><br>${data.feedback || "No feedback yet."}`;
+        ratingDiv.innerHTML = data.rating ? "⭐".repeat(data.rating) + ` (${data.rating}/5)` : "";
+      }
+    });
+  });
+</script>
+
+</body>
+</html>
