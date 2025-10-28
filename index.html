@@ -174,10 +174,16 @@
       const parts = value.split(`; ${name}=`);
       if (parts.length === 2) return parts.pop().split(";").shift();
     }
+
     let username = getCookie("username");
-    if (!username) {
-      username = prompt("Enter your name (e.g., Coder):") || "Coder";
-      document.cookie = `username=${username}; path=/; max-age=${60 * 60 * 24 * 30}`;
+
+    // Keep asking for a valid name
+    while (!username || username.trim() === "") {
+      username = prompt("Enter your name (e.g., Coder):");
+      if (username && username.trim() !== "") {
+        username = username.trim();
+        document.cookie = `username=${username}; path=/; max-age=${60 * 60 * 24 * 30}`;
+      }
     }
 
     // --- Page Nav ---
@@ -275,5 +281,4 @@
   </script>
 </body>
 </html>
-
 
