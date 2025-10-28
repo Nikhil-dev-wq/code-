@@ -67,29 +67,38 @@
   const db = firebase.database();
 
   const taskList = document.getElementById("taskList");
-  const output = document.getElementById("output");
   const notification = document.getElementById("notification");
   const feedbackBox = document.getElementById("feedbackBox");
   const feedbackText = document.getElementById("feedbackText");
   const ratingDiv = document.getElementById("rating");
 
-  const username = localStorage.getItem("username") || prompt("Enter your name:");
-  localStorage.setItem("username", username);
+  // --- Username setup ---
+  function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(";").shift();
+  }
 
-  // --- Load tasks (only one active) ---
+  let username = getCookie("username") || localStorage.getItem("username");
+
+  if (!username || username.trim() === "") {
+    username = prompt("Enter your name (e.g., Coder):") || "Coder";
+    document.cookie = `username=${username}; path=/; max-age=${60 * 60 * 24 * 30}`;
+    localStorage.setItem("username", username);
+  }
+
+  // --- Load latest task ---
   db.ref("tasks").limitToLast(1).on("value", (snapshot) => {
     const data = snapshot.val();
     taskList.innerHTML = "";
     if (!data) {
       taskList.innerHTML = "<p>No task assigned yet.</p>";
       document.getElementById("editor").style.display = "none";
-      document.getElementById("runBtn").style.display = "none";
       document.getElementById("submitBtn").style.display = "none";
       return;
     }
 
     document.getElementById("editor").style.display = "block";
-    document.getElementById("runBtn").style.display = "inline-block";
     document.getElementById("submitBtn").style.display = "inline-block";
 
     const task = Object.values(data)[0];
@@ -111,7 +120,6 @@
     });
   });
 
-
   // --- Submit Code ---
   document.getElementById("submitBtn").onclick = () => {
     const code = editor.getValue().trim();
@@ -125,7 +133,6 @@
       alert("✅ Code submitted successfully!");
       editor.updateOptions({ readOnly: true });
       document.getElementById("submitBtn").disabled = true;
-      document.getElementById("runBtn").disabled = true;
     }
   };
 
@@ -151,7 +158,6 @@
         feedbackBox.style.display = "none";
         editor.updateOptions({ readOnly: false });
         document.getElementById("submitBtn").disabled = false;
-        document.getElementById("runBtn").disabled = false;
         return;
       }
 
@@ -166,4 +172,5 @@
   </script>
 </body>
 </html>
+
 
