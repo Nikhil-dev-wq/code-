@@ -4,21 +4,26 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Live Share Code Editor</title>
+
+  <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-database-compat.js"></script>
+
+  <!-- Monaco Editor -->
   <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.33.0/min/vs/loader.js"></script>
-  <script src="https://unpkg.com/feather-icons"></script>
+
+  <!-- Skulpt for Python -->
   <script src="https://cdn.jsdelivr.net/npm/skulpt@1.2.0/dist/skulpt.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/skulpt@1.2.0/dist/skulpt-stdlib.js"></script>
+
+  <!-- Feather Icons -->
+  <script src="https://unpkg.com/feather-icons"></script>
+
   <style>
     body { background: #111; color: #fff; margin: 0; font-family: sans-serif; }
     header {
-      background: #222;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 10px 15px;
-      font-size: 1.2em;
+      background: #222; display: flex; justify-content: space-between;
+      align-items: center; padding: 10px 15px; font-size: 1.2em;
       border-bottom: 1px solid #333;
     }
     #editor { height: 70vh; border: 1px solid #333; }
@@ -30,19 +35,12 @@
     }
     button:hover { background: #666; }
     .active { background: #22c55e !important; }
-    #chatBtn {
-      background: #22c55e;
-      margin-right: 10px;
-    }
+    #chatBtn { background: #22c55e; margin-right: 10px; }
     #chatBtn:hover { background: #16a34a; }
     #output {
-      background: #000;
-      color: #0f0;
-      font-family: monospace;
-      padding: 10px;
-      border-top: 1px solid #333;
-      height: 20vh;
-      overflow-y: auto;
+      background: #000; color: #0f0; font-family: monospace;
+      padding: 10px; border-top: 1px solid #333;
+      height: 20vh; overflow-y: auto;
     }
   </style>
 </head>
@@ -61,11 +59,8 @@
 
   <div id="output">Output will appear here...</div>
 
-  <script type="module">
+  <script>
     // --- Firebase Setup ---
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
-    import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-database.js";
-
     const firebaseConfig = {
       apiKey: "AIzaSyCQOhn1RMCnGbtYyJbl_KyHwWzftsn44tk",
       authDomain: "social-516f8.firebaseapp.com",
@@ -75,16 +70,15 @@
       messagingSenderId: "190734911459",
       appId: "1:190734911459:web:ef79ce73f7dbdd617e50a8"
     };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const codeRef = db.ref("liveCode");
 
-    const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
-    const codeRef = ref(db, "liveCode");
+    let editor, syncing = false;
 
-    // --- Monaco Editor ---
-    let editor, liveShareEnabled = false;
-
+    // --- Monaco Editor Setup ---
     require.config({ paths: { 'vs': 'https://cdn.jsdelivr.net/npm/monaco-editor@0.33.0/min/vs' }});
-    require(["vs/editor/editor.main"], function() {
+    require(["vs/editor/editor.main"], function () {
       editor = monaco.editor.create(document.getElementById("editor"), {
         value: "# Write Python code here\nprint('Hello from Live Share!')",
         language: "python",
@@ -92,38 +86,26 @@
         automaticLayout: true
       });
 
-      // Listen for remote updates
-      onValue(codeRef, (snapshot) => {
-        const val = snapshot.val();
-        if (val && !liveShareEnabled && editor.getValue() !== val.code) {
-          editor.setValue(val.code);
-        }
-      });
-
-      // When local user types
+      // Update Firebase when typing
       editor.onDidChangeModelContent(() => {
-        if (liveShareEnabled) {
-          const code = editor.getValue();
-          set(codeRef, { code });
+        if (syncing) return; // avoid loops
+        const code = editor.getValue();
+        codeRef.set({ code });
+      });
+
+      // Receive live updates
+      codeRef.on("value", snapshot => {
+        const val = snapshot.val();
+        if (!val) return;
+        if (editor.getValue() !== val.code) {
+          syncing = true;
+          editor.setValue(val.code);
+          syncing = false;
         }
       });
     });
 
-    // --- Live Share Toggle ---
-    const btn = document.getElementById("liveShareBtn");
-    btn.addEventListener("click", () => {
-      liveShareEnabled = !liveShareEnabled;
-      if (liveShareEnabled) {
-        btn.classList.add("active");
-        btn.innerHTML = `<i data-feather="share"></i> Stop Live Share`;
-      } else {
-        btn.classList.remove("active");
-        btn.innerHTML = `<i data-feather="share-2"></i> Start Live Share`;
-      }
-      feather.replace();
-    });
-
-    // --- Run Code Button (Python using Skulpt) ---
+    // --- Run Python Code using Skulpt ---
     const runBtn = document.getElementById("runBtn");
     const output = document.getElementById("output");
 
@@ -132,7 +114,8 @@
     }
 
     function builtinRead(x) {
-      if (!Sk.builtinFiles || !Sk.builtinFiles["files"][x]) throw "File not found: " + x;
+      if (!Sk.builtinFiles || !Sk.builtinFiles["files"][x])
+        throw "File not found: " + x;
       return Sk.builtinFiles["files"][x];
     }
 
@@ -141,14 +124,22 @@
       const code = editor.getValue();
       Sk.configure({ output: outf, read: builtinRead });
       Sk.misceval.asyncToPromise(() => Sk.importMainWithBody("<stdin>", false, code, true))
-        .catch((err) => { output.innerHTML = `<span style='color:red'>${err}</span>`; });
+        .catch(err => output.innerHTML = `<span style='color:red'>${err}</span>`);
     }
 
     runBtn.addEventListener("click", runCode);
 
+    // --- Live Share Button Toggle ---
+    const liveBtn = document.getElementById("liveShareBtn");
+    let liveEnabled = true; // always active for collaboration
+
+    liveBtn.addEventListener("click", () => {
+      alert("Live Share is always active! Any user connected can edit together.");
+    });
+
     // --- Go to Chat Page ---
     document.getElementById("chatBtn").addEventListener("click", () => {
-      window.location.href = "index.html"; // Change to your chat page filename
+      window.location.href = "index.html";
     });
 
     feather.replace();
