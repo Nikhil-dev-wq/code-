@@ -43,11 +43,8 @@
   <div id="editor"></div>
 
   <div class="btns">
-    <button id="runBtn">▶ Run Code</button>
     <button id="submitBtn">✅ Submit</button>
   </div>
-
-  <div id="output">Output will appear here...</div>
 
   <div id="feedbackBox">
     <h3>📬 Feedback</h3>
@@ -114,19 +111,6 @@
     });
   });
 
-  // --- Run Code ---
-  document.getElementById("runBtn").onclick = () => {
-    output.innerHTML = "";
-    const code = editor.getValue();
-    function outf(text) { output.innerHTML += text; }
-    function builtinRead(x) {
-      if (!Sk.builtinFiles || !Sk.builtinFiles["files"][x]) throw "File not found: " + x;
-      return Sk.builtinFiles["files"][x];
-    }
-    Sk.configure({ output: outf, read: builtinRead });
-    Sk.misceval.asyncToPromise(() => Sk.importMainWithBody("<stdin>", false, code, true))
-      .catch(err => output.innerHTML = `<span style='color:red'>${err}</span>`);
-  };
 
   // --- Submit Code ---
   document.getElementById("submitBtn").onclick = () => {
