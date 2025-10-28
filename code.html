@@ -109,8 +109,9 @@
     const output = document.getElementById("output");
     const runBtn = document.getElementById("runBtn");
     runBtn.addEventListener("click", () => {
-      const code = editor.getValue();
       output.innerHtml = "";
+      const code = editor.getValue();
+  
       Sk.configure({
         output: text => output.innerHTML += text,
         read: name => {
