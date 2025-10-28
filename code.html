@@ -94,21 +94,25 @@ print("Hello", name)
     });
 
     async function runPython(code) {
-      term.innerHTML = "";
-      try {
-        pyodide.registerJsModule("js_input", { input: jsInput });
-        const wrapped = `
+      async function runPython(code) {
+  term.innerHTML = "";
+  try {
+    pyodide.registerJsModule("js_input", { input: jsInput });
+    const wrapped = `
 import builtins, js_input
 builtins.input = js_input.input
 ${code}
 `;
-        const result = await pyodide.runPythonAsync(wrapped);
-        if (result !== undefined) term.innerHTML += result + "\n";
-      } catch (err) {
-        term.innerHTML += `❌ Error: ${err}\n`;
-      }
-      term.scrollTop = term.scrollHeight;
+    const result = await pyodide.runPythonAsync(wrapped);
+    if (result !== undefined && result !== null) {
+      term.innerHTML += result + "\n";
     }
+  } catch (err) {
+    term.innerHTML += `❌ Error: ${err}\n`;
+  }
+  term.scrollTop = term.scrollHeight;
+}
+
 
     runBtn.onclick = () => runPython(editor.value);
   </script>
