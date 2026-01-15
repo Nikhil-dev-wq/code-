@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Live Python Editor</title>
+  <title>Live Python Editor + Runner</title>
 
   <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/10.12.3/firebase-app-compat.js"></script>
@@ -17,50 +17,51 @@
   <style>
     body { margin:0; background:#111; color:#fff; font-family:sans-serif; }
     header { background:#222; padding:10px; border-bottom:1px solid #333; }
-    #editor { height:70vh; }
+    #editor { height:65vh; }
     #controls { padding:10px; }
     #output {
-      background:#000; padding:10px; height:20vh;
-      overflow:auto; border-top:1px solid #333;
-      font-family:monospace;
+      background:#000; color:#0f0;
+      padding:10px; height:20vh;
+      overflow:auto; font-family:monospace;
+      border-top:1px solid #333;
     }
     button {
-      background:#333; color:#fff; border:none;
-      padding:8px 14px; border-radius:6px;
-      cursor:pointer;
+      background:#333; color:#fff;
+      border:none; padding:8px 14px;
+      border-radius:6px; cursor:pointer;
     }
+    button:disabled { opacity:0.5; cursor:not-allowed; }
   </style>
 </head>
 <body>
 
 <header>🐍 Live Python Editor + Runner</header>
+
 <div id="editor"></div>
 
 <div id="controls">
-  <button onclick="runPython()">▶ Run</button>
+  <button id="runBtn" disabled>▶ Run</button>
 </div>
 
-<div id="output">Output will appear here...</div>
+<div id="output">Loading Python...</div>
 
 <script>
-  // Firebase
+  // ---------- Firebase ----------
   firebase.initializeApp({
     apiKey: "AIzaSyCQOhn1RMCnGbtYyJbl_KyHwWzftsn44tk",
     authDomain: "social-516f8.firebaseapp.com",
     databaseURL: "https://social-516f8-default-rtdb.firebaseio.com/",
-    projectId: "social-516f8"
+    projectId: "social-516f8",
+    storageBucket: "social-516f8.appspot.com",
+    messagingSenderId: "190734911459",
+    appId: "1:190734911459:web:ef79ce73f7dbdd617e50a8"
   });
 
   const db = firebase.database();
   const codeRef = db.ref("livePythonCode");
 
-  let editor, updating = false, pyodide;
-
-  // Load Pyodide
-  async function loadPyodideEnv() {
-    pyodide = await loadPyodide();
-  }
-  loadPyodideEnv();
+  // ---------- Monaco ----------
+  let editor, updating = false;
 
   require.config({
     paths: { vs: "https://cdn.jsdelivr.net/npm/monaco-editor@0.33.0/min/vs" }
@@ -87,8 +88,21 @@
     });
   });
 
+  // ---------- Pyodide ----------
+  let pyodide = null;
+  const runBtn = document.getElementById("runBtn");
+  const output = document.getElementById("output");
+
+  async function initPyodide() {
+    pyodide = await loadPyodide();
+    runBtn.disabled = false;
+    output.textContent = "Ready ✔";
+  }
+  initPyodide();
+
   async function runPython() {
-    const output = document.getElementById("output");
+    if (!pyodide || !editor) return;
+
     output.textContent = "";
 
     try {
@@ -98,15 +112,15 @@ from io import StringIO
 sys.stdout = StringIO()
 `);
       pyodide.runPython(editor.getValue());
-      output.textContent = pyodide.runPython("sys.stdout.getvalue()");
+      output.textContent =
+        pyodide.runPython("sys.stdout.getvalue()") || "(no output)";
     } catch (err) {
       output.textContent = err;
     }
   }
+
+  runBtn.onclick = runPython;
 </script>
 
 </body>
 </html>
-
-
-
