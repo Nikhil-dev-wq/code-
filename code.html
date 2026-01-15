@@ -11,36 +11,56 @@
   <!-- Monaco -->
   <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.33.0/min/vs/loader.js"></script>
 
+  <!-- Pyodide -->
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+
   <style>
     body { margin:0; background:#111; color:#fff; font-family:sans-serif; }
-    header {
-      background:#222; padding:10px 15px;
-      border-bottom:1px solid #333;
+    header { background:#222; padding:10px; border-bottom:1px solid #333; }
+    #editor { height:70vh; }
+    #controls { padding:10px; }
+    #output {
+      background:#000; padding:10px; height:20vh;
+      overflow:auto; border-top:1px solid #333;
+      font-family:monospace;
     }
-    #editor { height:90vh; }
+    button {
+      background:#333; color:#fff; border:none;
+      padding:8px 14px; border-radius:6px;
+      cursor:pointer;
+    }
   </style>
 </head>
 <body>
 
-<header>🐍 True Live Python Share Editor</header>
+<header>🐍 Live Python Editor + Runner</header>
 <div id="editor"></div>
 
+<div id="controls">
+  <button onclick="runPython()">▶ Run</button>
+</div>
+
+<div id="output">Output will appear here...</div>
+
 <script>
-  // Firebase (UNCHANGED)
+  // Firebase
   firebase.initializeApp({
     apiKey: "AIzaSyCQOhn1RMCnGbtYyJbl_KyHwWzftsn44tk",
     authDomain: "social-516f8.firebaseapp.com",
     databaseURL: "https://social-516f8-default-rtdb.firebaseio.com/",
-    projectId: "social-516f8",
-    storageBucket: "social-516f8.appspot.com",
-    messagingSenderId: "190734911459",
-    appId: "1:190734911459:web:ef79ce73f7dbdd617e50a8"
+    projectId: "social-516f8"
   });
 
   const db = firebase.database();
   const codeRef = db.ref("livePythonCode");
 
-  let editor, updating = false;
+  let editor, updating = false, pyodide;
+
+  // Load Pyodide
+  async function loadPyodideEnv() {
+    pyodide = await loadPyodide();
+  }
+  loadPyodideEnv();
 
   require.config({
     paths: { vs: "https://cdn.jsdelivr.net/npm/monaco-editor@0.33.0/min/vs" }
@@ -48,7 +68,7 @@
 
   require(["vs/editor/editor.main"], () => {
     editor = monaco.editor.create(document.getElementById("editor"), {
-      value: "# Python Live Editor\nprint('Hello World')",
+      value: "print('Hello Python')",
       language: "python",
       theme: "vs-dark",
       automaticLayout: true
@@ -66,9 +86,27 @@
       updating = false;
     });
   });
+
+  async function runPython() {
+    const output = document.getElementById("output");
+    output.textContent = "";
+
+    try {
+      pyodide.runPython(`
+import sys
+from io import StringIO
+sys.stdout = StringIO()
+`);
+      pyodide.runPython(editor.getValue());
+      output.textContent = pyodide.runPython("sys.stdout.getvalue()");
+    } catch (err) {
+      output.textContent = err;
+    }
+  }
 </script>
 
 </body>
 </html>
+
 
 
